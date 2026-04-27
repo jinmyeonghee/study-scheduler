@@ -190,7 +190,8 @@ function handleCheck(el) {
   }
 
   saveState();
-  renderSchedule(); // 🔥 핵심: 전체 다시 그리기
+  calc(unitId);
+  updateType(unitId);
 }
 
 // ---------------- schedule ----------------
@@ -222,7 +223,7 @@ function renderSchedule() {
   calcAll();
 }
 
-// ---------------- 계산 ----------------
+// ---------------- 계산 (🔥 핵심 수정) ----------------
 function calcAll() {
   summaryData.forEach(r => {
     calc(r.unit);
@@ -236,7 +237,15 @@ function calc(unitId) {
 
   let d1=0,d2=0,d3=0;
 
-  Object.entries(state[unitId] || {}).forEach(([key,day]) => {
+  // 🔥 UI 기준으로 계산
+  const checkedInputs = document.querySelectorAll(
+    `input[data-unit="${unitId}"]:checked`
+  );
+
+  checkedInputs.forEach(input => {
+    const key = input.dataset.key;
+    const day = input.dataset.day;
+
     if(day==='d1') d1 += map[key]||0;
     if(day==='d2') d2 += map[key]||0;
     if(day==='d3') d3 += map[key]||0;
@@ -249,7 +258,12 @@ function calc(unitId) {
 
 // ---------------- 타입 ----------------
 function updateType(unitId){
-  const days = Object.values(state[unitId] || {});
+  const checked = document.querySelectorAll(
+    `input[data-unit="${unitId}"]:checked`
+  );
+
+  let days = Array.from(checked).map(i => i.dataset.day);
+
   let type = '-';
 
   if(days.includes('d3')) type = 'day3';
