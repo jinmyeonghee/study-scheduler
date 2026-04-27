@@ -43,34 +43,22 @@ function saveState() {
   localStorage.setItem('schedule_state', JSON.stringify(state));
 }
 
-// ---------------- 파일 읽기 ----------------
 function handleFile() {
   const file = document.getElementById('file').files[0];
-  if(!file) {
-    alert("파일 선택하세요");
-    return;
-  }
+  if(!file) return alert("파일 선택하세요");
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws);
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(ws);
 
-      compute(json);
-
-    } catch(e) {
-      console.error(e);
-      alert("파일 읽기 실패");
-    }
+    compute(json);
   };
-
   reader.readAsArrayBuffer(file);
 }
 
-// ---------------- 집계 ----------------
 function compute(data) {
   const grouped = {};
 
@@ -104,7 +92,6 @@ function compute(data) {
   renderSchedule();
 }
 
-// ---------------- summary ----------------
 function renderSummary() {
   const el = document.getElementById('summary');
 
@@ -126,9 +113,7 @@ function renderSummary() {
   });
 }
 
-// ---------------- 체크박스 ----------------
 function renderCheckboxGroup(unitId, day) {
-
   const activeKeys = allKeys.filter(k => {
     if(k === 'concept') return true;
     return summaryData.some(r => r[k] > 0);
@@ -152,7 +137,6 @@ function renderCheckboxGroup(unitId, day) {
   `</div>`;
 }
 
-// ---------------- 체크 처리 ----------------
 function handleCheck(unitId, key, day) {
   if(!state[unitId]) state[unitId] = {};
 
@@ -166,29 +150,13 @@ function handleCheck(unitId, key, day) {
   updateRow(unitId);
 }
 
-// ---------------- row 업데이트 ----------------
 function updateRow(unitId){
   const map = summaryData.find(r => r.unit == unitId);
   if(!map) return;
 
-  allKeys.forEach(k=>{
-    ['d1','d2','d3'].forEach(day=>{
-      const selector = `input[onchange="handleCheck('${unitId}', '${k}', '${day}')"]`;
-      const el = document.querySelector(selector);
-      if(!el) return;
-
-      const assigned = state[unitId]?.[k];
-
-      el.checked = assigned === day;
-      el.disabled = assigned && assigned !== day;
-      el.parentElement.classList.toggle('disabled', assigned && assigned !== day);
-    });
-  });
-
   calc(unitId);
 }
 
-// ---------------- schedule ----------------
 function renderSchedule() {
   const el = document.getElementById('schedule');
 
@@ -230,7 +198,6 @@ function calc(unitId) {
   document.getElementById(`t3_${unitId}`).innerText = d3.toFixed(1);
 }
 
-// ---------------- 자동 커리큘럼 ----------------
 function autoSchedule() {
   summaryData.forEach((unit) => {
     const id = unit.unit;
