@@ -8,11 +8,7 @@
 <style>
 body { font-family: Arial; padding:20px; }
 
-table {
-  border-collapse: collapse;
-  width:100%;
-  margin-top:20px;
-}
+table { border-collapse: collapse; width:100%; margin-top:20px; }
 
 th, td {
   border:1px solid #ccc;
@@ -21,9 +17,7 @@ th, td {
   vertical-align: top;
 }
 
-th {
-  background:#f5f5f5;
-}
+th { background:#f5f5f5; }
 
 .box {
   text-align:left;
@@ -32,19 +26,17 @@ th {
   width:180px;
 }
 
-label {
-  display:block;
-  font-size:14px;
-}
-
-.day-col {
-  width:200px;
-}
+label { display:block; font-size:14px; }
 
 .type-day1 { color:green; font-weight:bold; }
 .type-day2 { color:orange; font-weight:bold; }
 .type-day3 { color:red; font-weight:bold; }
 
+.summary-box {
+  margin-top:30px;
+  padding:15px;
+  border:1px solid #ddd;
+}
 </style>
 </head>
 
@@ -59,7 +51,13 @@ label {
 
 <h2>3. Day 스케줄</h2>
 <button onclick="autoSchedule()">🔥 자동 커리큘럼 생성</button>
+<button onclick="downloadCSV()">⬇️ 다운로드</button>
 <table id="schedule"></table>
+
+<div class="summary-box">
+  <h3>📊 전체 요약</h3>
+  <div id="finalSummary"></div>
+</div>
 
 <script>
 let summaryData = [];
@@ -76,7 +74,6 @@ function saveState() {
   localStorage.setItem('schedule_state', JSON.stringify(state));
 }
 
-// ---------------- 파일 읽기 ----------------
 function handleFile() {
   const file = document.getElementById('file').files[0];
   if(!file) return alert("파일 선택하세요");
@@ -87,13 +84,11 @@ function handleFile() {
     const wb = XLSX.read(data, { type: 'array' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(ws);
-
     compute(json);
   };
   reader.readAsArrayBuffer(file);
 }
 
-// ---------------- 집계 ----------------
 function compute(data) {
   const grouped = {};
 
@@ -127,38 +122,43 @@ function compute(data) {
   renderSchedule();
 }
 
-// ---------------- summary ----------------
 function renderSummary() {
   const el = document.getElementById('summary');
-
-  const activeCols = columns.filter(c =>
-    summaryData.some(r => r[c] > 0)
-  );
-
-  let header = '<tr><th>unit</th><th>개념영상</th>';
-  activeCols.forEach(c => header += `<th>${c}</th>`);
-  header += '</tr>';
-
+  let header = '<tr><th>unit</th><th>개념영상</th></tr>';
   el.innerHTML = header;
 
   summaryData.forEach(r => {
-    let row = `<tr><td>${r.unit}</td><td>${r.concept.toFixed(1)}</td>`;
-    activeCols.forEach(c => row += `<td>${r[c].toFixed(1)}</td>`);
-    row += '</tr>';
-    el.innerHTML += row;
+    el.innerHTML += `<tr><td>${r.unit}</td><td>${r.concept.toFixed(1)}</td></tr>`;
   });
 }
 
-// ---------------- 체크 UI ----------------
+// 🔥 스크롤 유지용
+let lastScroll = 0;
+
+function handleCheck(el) {
+  lastScroll = window.scrollY;
+
+  const unitId = el.dataset.unit;
+  const key = el.dataset.key;
+  const day = el.dataset.day;
+
+  if(!state[unitId]) state[unitId] = {};
+
+  if(state[unitId][key] === day) delete state[unitId][key];
+  else state[unitId][key] = day;
+
+  saveState();
+  renderSchedule();
+
+  setTimeout(() => {
+    window.scrollTo(0, lastScroll);
+  }, 0);
+}
+
 function renderCheckboxGroup(unitId, day) {
-
-  const activeKeys = allKeys.filter(k => {
-    if(k === 'concept') return true;
-    return summaryData.some(r => r[k] > 0);
-  });
-
   return `<div class="box">` +
-    activeKeys.map(k => {
+    allKeys.map(k => {
+      if(k !== 'concept' && !summaryData.some(r => r[k] > 0)) return '';
       const checked = state[unitId]?.[k] === day;
 
       return `
@@ -175,26 +175,6 @@ function renderCheckboxGroup(unitId, day) {
   `</div>`;
 }
 
-// ---------------- 체크 처리 ----------------
-function handleCheck(el) {
-  const unitId = el.dataset.unit;
-  const key = el.dataset.key;
-  const day = el.dataset.day;
-
-  if(!state[unitId]) state[unitId] = {};
-
-  if(state[unitId][key] === day) {
-    delete state[unitId][key];
-  } else {
-    state[unitId][key] = day;
-  }
-
-  saveState();
-  calc(unitId);
-  updateType(unitId);
-}
-
-// ---------------- schedule ----------------
 function renderSchedule() {
   const el = document.getElementById('schedule');
 
@@ -202,50 +182,41 @@ function renderSchedule() {
   <tr>
     <th>unit</th>
     <th>타입</th>
-    <th class="day-col">Day1</th><th>시간</th>
-    <th class="day-col">Day2</th><th>시간</th>
-    <th class="day-col">Day3</th><th>시간</th>
+    <th>Day1</th><th>시간</th>
+    <th>Day2</th><th>시간</th>
+    <th>Day3</th><th>시간</th>
   </tr>`;
 
-  summaryData.forEach((r) => {
+  summaryData.forEach(r => {
     el.innerHTML += `<tr>
       <td>${r.unit}</td>
-      <td id="type_${r.unit}">-</td>
+      <td id="type_${r.unit}"></td>
       <td>${renderCheckboxGroup(r.unit,'d1')}</td>
-      <td id="t1_${r.unit}">0</td>
+      <td id="t1_${r.unit}"></td>
       <td>${renderCheckboxGroup(r.unit,'d2')}</td>
-      <td id="t2_${r.unit}">0</td>
+      <td id="t2_${r.unit}"></td>
       <td>${renderCheckboxGroup(r.unit,'d3')}</td>
-      <td id="t3_${r.unit}">0</td>
+      <td id="t3_${r.unit}"></td>
     </tr>`;
   });
 
   calcAll();
+  renderFinalSummary();
 }
 
-// ---------------- 계산 (🔥 핵심 수정) ----------------
 function calcAll() {
-  summaryData.forEach(r => {
-    calc(r.unit);
-    updateType(r.unit);
-  });
+  summaryData.forEach(r => calc(r.unit));
 }
 
 function calc(unitId) {
   const map = summaryData.find(r => r.unit == unitId);
-  if(!map) return;
-
   let d1=0,d2=0,d3=0;
 
-  // 🔥 UI 기준으로 계산
-  const checkedInputs = document.querySelectorAll(
-    `input[data-unit="${unitId}"]:checked`
-  );
+  const checked = document.querySelectorAll(`input[data-unit="${unitId}"]:checked`);
 
-  checkedInputs.forEach(input => {
+  checked.forEach(input => {
     const key = input.dataset.key;
     const day = input.dataset.day;
-
     if(day==='d1') d1 += map[key]||0;
     if(day==='d2') d2 += map[key]||0;
     if(day==='d3') d3 += map[key]||0;
@@ -254,45 +225,58 @@ function calc(unitId) {
   document.getElementById(`t1_${unitId}`).innerText = d1.toFixed(1);
   document.getElementById(`t2_${unitId}`).innerText = d2.toFixed(1);
   document.getElementById(`t3_${unitId}`).innerText = d3.toFixed(1);
+
+  updateType(unitId);
 }
 
-// ---------------- 타입 ----------------
 function updateType(unitId){
-  const checked = document.querySelectorAll(
-    `input[data-unit="${unitId}"]:checked`
-  );
+  const checked = document.querySelectorAll(`input[data-unit="${unitId}"]:checked`);
+  const days = Array.from(checked).map(i=>i.dataset.day);
 
-  let days = Array.from(checked).map(i => i.dataset.day);
-
-  let type = '-';
-
-  if(days.includes('d3')) type = 'day3';
-  else if(days.includes('d2')) type = 'day2';
-  else if(days.includes('d1')) type = 'day1';
+  let type='-';
+  if(days.includes('d3')) type='day3';
+  else if(days.includes('d2')) type='day2';
+  else if(days.includes('d1')) type='day1';
 
   const el = document.getElementById(`type_${unitId}`);
   el.innerText = type;
   el.className = `type-${type}`;
 }
 
-// ---------------- 자동 ----------------
-function autoSchedule() {
-  summaryData.forEach((unit) => {
-    const id = unit.unit;
-    if(!state[id]) state[id] = {};
+// 🔥 요약 생성
+function renderFinalSummary(){
+  let totalDays = 0;
 
-    state[id]['concept'] = 'd1';
-    state[id]['개념원리 확인문제'] = 'd1';
-    state[id]['핵심문제'] = 'd1';
-    state[id]['핵심문제up'] = 'd1';
+  summaryData.forEach(r=>{
+    const checked = document.querySelectorAll(`input[data-unit="${r.unit}"]:checked`);
+    const days = new Set(Array.from(checked).map(i=>i.dataset.day));
+    totalDays += days.size;
+  });
 
-    allKeys.forEach(k => {
-      if(!state[id][k]) state[id][k] = 'd2';
+  document.getElementById('finalSummary').innerHTML =
+    `총 예상 소요일: <b>${totalDays}일</b>`;
+}
+
+// 🔥 다운로드
+function downloadCSV(){
+  let rows = [['unit','day','내용']];
+
+  summaryData.forEach(r=>{
+    const checked = document.querySelectorAll(`input[data-unit="${r.unit}"]:checked`);
+    checked.forEach(i=>{
+      rows.push([r.unit, i.dataset.day, i.dataset.key]);
     });
   });
 
-  saveState();
-  renderSchedule();
+  let csv = rows.map(r=>r.join(',')).join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'schedule.csv';
+  a.click();
 }
 </script>
 
