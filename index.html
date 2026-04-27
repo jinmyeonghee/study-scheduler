@@ -1,250 +1,65 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
 <title>학습 시간 계산기</title>
-<style>
-  body { font-family: Arial; padding:20px; }
-  table { border-collapse: collapse; width:100%; margin-top:20px; }
-  th, td { border:1px solid #ccc; padding:6px; text-align:center; vertical-align: top; }
-  .box { text-align:left; max-height:120px; overflow:auto; }
-  label { display:block; font-size:12px; }
-  .disabled { opacity:0.3; }
-</style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+body { font-family: Arial; padding:20px; }
+table { border-collapse: collapse; width:100%; margin-top:20px; }
+th, td { border:1px solid #ccc; padding:6px; text-align:center; }
+</style>
 </head>
 <body>
 
 <h2>1. 데이터 입력</h2>
-<input type="file" id="file" accept=".xlsx,.xls" />
+<input type="file" id="file">
 <button onclick="handleFile()">파일 읽기</button>
 
-<h2>2. 소단원 집계 결과</h2>
-<table id="summary"></table>
-
-<h2>3. Day 스케줄</h2>
-<button onclick="autoSchedule()">🔥 자동 커리큘럼 생성</button>
-<table id="schedule"></table>
+<h2>2. 결과</h2>
+<table id="result"></table>
 
 <script>
-let summaryData = [];
-let state = JSON.parse(localStorage.getItem('schedule_state') || '{}');
-
-const columns = [
-  '개념원리 확인문제','핵심문제','확인문제','핵심문제up','확인문제up',
-  '계산력 강화하기','이문시','이문시up','step1','step2','step3','서술형예제','서술형유제'
-];
-
-const allKeys = ['concept', ...columns];
-
-function saveState() {
-  localStorage.setItem('schedule_state', JSON.stringify(state));
-}
-
-function normalizeRows(headers, rows) {
-  return rows.map(r => {
-    const obj = {};
-    headers.forEach((h,i)=> obj[h] = (r[i] ?? '').toString().trim());
-    obj.duration_ms = Number(obj.duration_ms || 0);
-    obj.video_type = Number(obj.video_type || 0);
-    return obj;
-  });
-}
-
-function compute(data) {
-  const grouped = {};
-
-  data.forEach(row => {
-    const id = String(row.unit_id || '').trim();
-    if(!id) return;
-
-    if(!grouped[id]) {
-      grouped[id] = { concept:0 };
-      columns.forEach(c => grouped[id][c] = 0);
-    }
-
-    if(row.video_type === 3) {
-      grouped[id].concept += row.duration_ms;
-    } else {
-      columns.forEach(col => {
-        if(row[col]) grouped[id][col] += row.duration_ms;
-      });
-    }
-  });
-
-  summaryData = Object.entries(grouped).map(([unit, val]) => {
-    const obj = { unit, concept: val.concept/60000 };
-    columns.forEach(c => obj[c] = val[c]/60000);
-    return obj;
-  });
-
-  renderSummary();
-  renderSchedule();
-}
-
 function handleFile() {
   const file = document.getElementById('file').files[0];
   if(!file) {
-    alert('파일 선택하세요');
+    alert("파일 선택하세요");
     return;
   }
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(ws);
 
-      const json = XLSX.utils.sheet_to_json(ws, { header:1 });
-      if(!json.length) {
-        alert('데이터 없음');
-        return;
-      }
+    console.log(json); // 🔥 확인용
 
-      const headers = json[0];
-      const rows = json.slice(1);
-
-      compute(normalizeRows(headers, rows));
-    } catch(e) {
-      console.error(e);
-      alert('파일 읽기 실패');
-    }
+    render(json);
   };
+
   reader.readAsArrayBuffer(file);
 }
 
-function renderSummary() {
-  const el = document.getElementById('summary');
+function render(data) {
+  const el = document.getElementById("result");
+  el.innerHTML = "<tr><th>unit_id</th><th>총 시간(분)</th></tr>";
 
-  let header = '<tr><th>unit</th><th>개념영상</th>';
-  columns.forEach(c => header += `<th>${c}</th>`);
-  header += '</tr>';
+  const grouped = {};
 
-  el.innerHTML = header;
+  data.forEach(row => {
+    const id = row.unit_id;
+    const time = Number(row.duration_ms || 0) / 60000;
 
-  summaryData.forEach(r => {
-    let row = `<tr><td>${r.unit}</td><td>${r.concept.toFixed(1)}</td>`;
-    columns.forEach(c => row += `<td>${r[c].toFixed(1)}</td>`);
-    row += '</tr>';
-    el.innerHTML += row;
-  });
-}
-
-function renderCheckboxGroup(unitId, day) {
-  return `<div class="box">` +
-    allKeys.map(k => {
-      const assignedDay = state[unitId]?.[k];
-      const disabled = assignedDay && assignedDay !== day;
-      const checked = assignedDay === day;
-
-      return `
-      <label class="${disabled ? 'disabled':''}">
-        <input type="checkbox" 
-          ${checked ? 'checked':''}
-          ${disabled ? 'disabled':''}
-          onchange="handleCheck('${unitId}', '${k}', '${day}')">
-        ${k === 'concept' ? '개념영상' : k}
-      </label>`;
-    }).join('') +
-  `</div>`;
-}
-
-function handleCheck(unitId, key, day) {
-  if(!state[unitId]) state[unitId] = {};
-
-  if(state[unitId][key] === day) {
-    delete state[unitId][key];
-  } else {
-    state[unitId][key] = day;
-  }
-
-  saveState();
-  updateRow(unitId);
-}
-
-function updateRow(unitId){
-  const map = summaryData.find(r => r.unit === unitId);
-  if(!map) return;
-
-  allKeys.forEach(k=>{
-    ['d1','d2','d3'].forEach(day=>{
-      const selector = `input[onchange="handleCheck('${unitId}', '${k}', '${day}')"]`;
-      const el = document.querySelector(selector);
-      if(!el) return;
-
-      const assigned = state[unitId]?.[k];
-
-      el.checked = assigned === day;
-      el.disabled = assigned && assigned !== day;
-      el.parentElement.classList.toggle('disabled', assigned && assigned !== day);
-    });
+    if(!grouped[id]) grouped[id] = 0;
+    grouped[id] += time;
   });
 
-  calc(unitId);
-}
-
-function renderSchedule() {
-  const el = document.getElementById('schedule');
-
-  el.innerHTML = '<tr><th>unit</th><th>Day1</th><th>시간</th><th>Day2</th><th>시간</th><th>Day3</th><th>시간</th></tr>';
-
-  summaryData.forEach((r) => {
-    el.innerHTML += `<tr>
-      <td>${r.unit}</td>
-      <td>${renderCheckboxGroup(r.unit,'d1')}</td>
-      <td id="t1_${r.unit}">0</td>
-      <td>${renderCheckboxGroup(r.unit,'d2')}</td>
-      <td id="t2_${r.unit}">0</td>
-      <td>${renderCheckboxGroup(r.unit,'d3')}</td>
-      <td id="t3_${r.unit}">0</td>
-    </tr>`;
+  Object.entries(grouped).forEach(([k,v]) => {
+    el.innerHTML += `<tr><td>${k}</td><td>${v.toFixed(1)}</td></tr>`;
   });
-
-  calcAll();
 }
-
-function calcAll() {
-  summaryData.forEach(r => calc(r.unit));
-}
-
-function calc(unitId) {
-  const map = summaryData.find(r => r.unit === unitId);
-  if(!map) return;
-
-  let d1=0,d2=0,d3=0;
-
-  Object.entries(state[unitId] || {}).forEach(([key,day]) => {
-    if(day==='d1') d1 += map[key]||0;
-    if(day==='d2') d2 += map[key]||0;
-    if(day==='d3') d3 += map[key]||0;
-  });
-
-  document.getElementById(`t1_${unitId}`).innerText = d1.toFixed(1);
-  document.getElementById(`t2_${unitId}`).innerText = d2.toFixed(1);
-  document.getElementById(`t3_${unitId}`).innerText = d3.toFixed(1);
-}
-
-function autoSchedule() {
-  summaryData.forEach((unit) => {
-    const id = unit.unit;
-    if(!state[id]) state[id] = {};
-
-    state[id]['concept'] = 'd1';
-    state[id]['개념원리 확인문제'] = 'd1';
-    state[id]['핵심문제'] = 'd1';
-    state[id]['핵심문제up'] = 'd1';
-
-    allKeys.forEach(k => {
-      if(!state[id][k]) state[id][k] = 'd2';
-    });
-  });
-
-  saveState();
-  renderSchedule();
-}
-
 </script>
 
 </body>
