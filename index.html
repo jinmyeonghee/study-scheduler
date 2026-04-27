@@ -23,29 +23,27 @@ th, td {
 
 th {
   background:#f5f5f5;
-  font-size:14px;
 }
 
 .box {
   text-align:left;
   max-height:140px;
   overflow:auto;
-  width:180px; /* 🔥 줄임 */
+  width:180px;
 }
 
 label {
   display:block;
-  font-size:14px; /* 🔥 키움 */
-  margin-bottom:2px;
-}
-
-.disabled {
-  opacity:0.3;
+  font-size:14px;
 }
 
 .day-col {
   width:200px;
 }
+
+.type-day1 { color:green; font-weight:bold; }
+.type-day2 { color:orange; font-weight:bold; }
+.type-day3 { color:red; font-weight:bold; }
 
 </style>
 </head>
@@ -161,8 +159,7 @@ function renderCheckboxGroup(unitId, day) {
 
   return `<div class="box">` +
     activeKeys.map(k => {
-      const assignedDay = state[unitId]?.[k];
-      const checked = assignedDay === day;
+      const checked = state[unitId]?.[k] === day;
 
       return `
       <label>
@@ -193,8 +190,7 @@ function handleCheck(el) {
   }
 
   saveState();
-  calc(unitId);
-  updateUnitType(unitId);
+  renderSchedule(); // 🔥 핵심: 전체 다시 그리기
 }
 
 // ---------------- schedule ----------------
@@ -204,22 +200,22 @@ function renderSchedule() {
   el.innerHTML = `
   <tr>
     <th>unit</th>
+    <th>타입</th>
     <th class="day-col">Day1</th><th>시간</th>
     <th class="day-col">Day2</th><th>시간</th>
     <th class="day-col">Day3</th><th>시간</th>
-    <th>단원타입</th>
   </tr>`;
 
   summaryData.forEach((r) => {
     el.innerHTML += `<tr>
       <td>${r.unit}</td>
+      <td id="type_${r.unit}">-</td>
       <td>${renderCheckboxGroup(r.unit,'d1')}</td>
       <td id="t1_${r.unit}">0</td>
       <td>${renderCheckboxGroup(r.unit,'d2')}</td>
       <td id="t2_${r.unit}">0</td>
       <td>${renderCheckboxGroup(r.unit,'d3')}</td>
       <td id="t3_${r.unit}">0</td>
-      <td id="type_${r.unit}">-</td>
     </tr>`;
   });
 
@@ -230,7 +226,7 @@ function renderSchedule() {
 function calcAll() {
   summaryData.forEach(r => {
     calc(r.unit);
-    updateUnitType(r.unit);
+    updateType(r.unit);
   });
 }
 
@@ -251,17 +247,18 @@ function calc(unitId) {
   document.getElementById(`t3_${unitId}`).innerText = d3.toFixed(1);
 }
 
-// ---------------- 단원 타입 ----------------
-function updateUnitType(unitId){
+// ---------------- 타입 ----------------
+function updateType(unitId){
   const days = Object.values(state[unitId] || {});
-
   let type = '-';
 
   if(days.includes('d3')) type = 'day3';
   else if(days.includes('d2')) type = 'day2';
   else if(days.includes('d1')) type = 'day1';
 
-  document.getElementById(`type_${unitId}`).innerText = type;
+  const el = document.getElementById(`type_${unitId}`);
+  el.innerText = type;
+  el.className = `type-${type}`;
 }
 
 // ---------------- 자동 ----------------
