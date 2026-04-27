@@ -7,11 +7,46 @@
 
 <style>
 body { font-family: Arial; padding:20px; }
-table { border-collapse: collapse; width:100%; margin-top:20px; }
-th, td { border:1px solid #ccc; padding:6px; text-align:center; vertical-align: top; }
-.box { text-align:left; max-height:120px; overflow:auto; }
-label { display:block; font-size:12px; }
-.disabled { opacity:0.3; }
+
+table {
+  border-collapse: collapse;
+  width:100%;
+  margin-top:20px;
+}
+
+th, td {
+  border:1px solid #ccc;
+  padding:6px;
+  text-align:center;
+  vertical-align: top;
+}
+
+th {
+  background:#f5f5f5;
+  font-size:14px;
+}
+
+.box {
+  text-align:left;
+  max-height:140px;
+  overflow:auto;
+  width:180px; /* 🔥 줄임 */
+}
+
+label {
+  display:block;
+  font-size:14px; /* 🔥 키움 */
+  margin-bottom:2px;
+}
+
+.disabled {
+  opacity:0.3;
+}
+
+.day-col {
+  width:200px;
+}
+
 </style>
 </head>
 
@@ -43,6 +78,7 @@ function saveState() {
   localStorage.setItem('schedule_state', JSON.stringify(state));
 }
 
+// ---------------- 파일 읽기 ----------------
 function handleFile() {
   const file = document.getElementById('file').files[0];
   if(!file) return alert("파일 선택하세요");
@@ -59,6 +95,7 @@ function handleFile() {
   reader.readAsArrayBuffer(file);
 }
 
+// ---------------- 집계 ----------------
 function compute(data) {
   const grouped = {};
 
@@ -92,6 +129,7 @@ function compute(data) {
   renderSchedule();
 }
 
+// ---------------- summary ----------------
 function renderSummary() {
   const el = document.getElementById('summary');
 
@@ -113,7 +151,9 @@ function renderSummary() {
   });
 }
 
+// ---------------- 체크 UI ----------------
 function renderCheckboxGroup(unitId, day) {
+
   const activeKeys = allKeys.filter(k => {
     if(k === 'concept') return true;
     return summaryData.some(r => r[k] > 0);
@@ -122,22 +162,28 @@ function renderCheckboxGroup(unitId, day) {
   return `<div class="box">` +
     activeKeys.map(k => {
       const assignedDay = state[unitId]?.[k];
-      const disabled = assignedDay && assignedDay !== day;
       const checked = assignedDay === day;
 
       return `
-      <label class="${disabled ? 'disabled':''}">
+      <label>
         <input type="checkbox"
+          data-unit="${unitId}"
+          data-key="${k}"
+          data-day="${day}"
           ${checked ? 'checked':''}
-          ${disabled ? 'disabled':''}
-          onchange="handleCheck('${unitId}', '${k}', '${day}')">
+          onchange="handleCheck(this)">
         ${k === 'concept' ? '개념영상' : k}
       </label>`;
     }).join('') +
   `</div>`;
 }
 
-function handleCheck(unitId, key, day) {
+// ---------------- 체크 처리 ----------------
+function handleCheck(el) {
+  const unitId = el.dataset.unit;
+  const key = el.dataset.key;
+  const day = el.dataset.day;
+
   if(!state[unitId]) state[unitId] = {};
 
   if(state[unitId][key] === day) {
@@ -147,20 +193,22 @@ function handleCheck(unitId, key, day) {
   }
 
   saveState();
-  updateRow(unitId);
-}
-
-function updateRow(unitId){
-  const map = summaryData.find(r => r.unit == unitId);
-  if(!map) return;
-
   calc(unitId);
+  updateUnitType(unitId);
 }
 
+// ---------------- schedule ----------------
 function renderSchedule() {
   const el = document.getElementById('schedule');
 
-  el.innerHTML = '<tr><th>unit</th><th>Day1</th><th>시간</th><th>Day2</th><th>시간</th><th>Day3</th><th>시간</th></tr>';
+  el.innerHTML = `
+  <tr>
+    <th>unit</th>
+    <th class="day-col">Day1</th><th>시간</th>
+    <th class="day-col">Day2</th><th>시간</th>
+    <th class="day-col">Day3</th><th>시간</th>
+    <th>단원타입</th>
+  </tr>`;
 
   summaryData.forEach((r) => {
     el.innerHTML += `<tr>
@@ -171,14 +219,19 @@ function renderSchedule() {
       <td id="t2_${r.unit}">0</td>
       <td>${renderCheckboxGroup(r.unit,'d3')}</td>
       <td id="t3_${r.unit}">0</td>
+      <td id="type_${r.unit}">-</td>
     </tr>`;
   });
 
   calcAll();
 }
 
+// ---------------- 계산 ----------------
 function calcAll() {
-  summaryData.forEach(r => calc(r.unit));
+  summaryData.forEach(r => {
+    calc(r.unit);
+    updateUnitType(r.unit);
+  });
 }
 
 function calc(unitId) {
@@ -198,6 +251,20 @@ function calc(unitId) {
   document.getElementById(`t3_${unitId}`).innerText = d3.toFixed(1);
 }
 
+// ---------------- 단원 타입 ----------------
+function updateUnitType(unitId){
+  const days = Object.values(state[unitId] || {});
+
+  let type = '-';
+
+  if(days.includes('d3')) type = 'day3';
+  else if(days.includes('d2')) type = 'day2';
+  else if(days.includes('d1')) type = 'day1';
+
+  document.getElementById(`type_${unitId}`).innerText = type;
+}
+
+// ---------------- 자동 ----------------
 function autoSchedule() {
   summaryData.forEach((unit) => {
     const id = unit.unit;
