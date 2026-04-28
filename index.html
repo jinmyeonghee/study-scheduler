@@ -30,7 +30,9 @@ th{background:#f5f5f5}
 
 <h1>학습 시간 계산기</h1>
 
-<div class="sticky-summary" id="topSummary">파일을 업로드하면 요약이 표시됩니다.</div>
+<div class="sticky-summary" id="topSummary">
+  파일을 업로드하면 요약이 표시됩니다.
+</div>
 
 <h2>1. 데이터 입력</h2>
 <input type="file" id="file" accept=".xlsx,.xls">
@@ -59,7 +61,6 @@ th{background:#f5f5f5}
   <b>자동 분배 옵션</b><br>
   <button onclick="autoScheduleBasic()">기본형 자동분배</button>
   <button onclick="autoScheduleByLimit()">기준시간 맞춤형 자동분배</button>
-  <button onclick="autoScheduleAdvanced()">심화분리형 자동분배</button>
   <button onclick="downloadCSV()">⬇️ 다운로드</button>
 </div>
 
@@ -79,8 +80,14 @@ const cols=[
 const keys=['concept',...cols];
 const days=['d1','d2','d3','d4'];
 
-const basicDay1=['concept','개념원리 확인문제','핵심문제','확인문제','핵심문제up','확인문제up'];
-const advancedDay2=['계산력 강화하기','이문시','이문시up','step1','step2','step3','서술형예제','서술형유제'];
+const basicDay1=[
+  'concept',
+  '개념원리 확인문제',
+  '핵심문제',
+  '확인문제',
+  '핵심문제up',
+  '확인문제up'
+];
 
 const label=k=>k==='concept'?'개념영상':k;
 const limit=()=>Number(document.getElementById('dailyLimit').value||90);
@@ -370,26 +377,6 @@ function autoScheduleByLimit(){
 
       state[unit][k]=days[idx];
       sum+=t;
-    });
-  });
-
-  save();
-  renderSchedule();
-}
-
-function autoScheduleAdvanced(){
-  summaryData.forEach(row=>{
-    const unit=row.unit;
-    state[unit]={};
-
-    basicDay1.forEach(k=>{
-      if(row[k]>0) state[unit][k]='d1';
-    });
-
-    keys.forEach(k=>{
-      if(row[k]>0 && !state[unit][k]){
-        state[unit][k]=advancedDay2.includes(k)?'d2':'d1';
-      }
     });
   });
 
