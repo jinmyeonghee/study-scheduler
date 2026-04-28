@@ -6,14 +6,48 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
-body { font-family: Arial, sans-serif; padding: 24px; }
-button { margin-left: 8px; padding: 6px 10px; cursor: pointer; }
-table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 14px; }
-th, td { border: 1px solid #ccc; padding: 6px; text-align: center; vertical-align: top; }
-th { background: #f5f5f5; font-weight: bold; }
+body {
+  font-family: Arial, sans-serif;
+  padding: 24px;
+  background: #fff;
+}
+
+button, select, input {
+  padding: 6px 10px;
+  margin: 4px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+  vertical-align: top;
+}
+
+th {
+  background: #f5f5f5;
+}
+
+.sticky-summary {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff8dc;
+  border: 1px solid #ddd;
+  padding: 12px;
+  margin-bottom: 20px;
+  font-size: 15px;
+}
 
 .day-box {
-  width: 190px;
+  width: 210px;
   max-height: 140px;
   overflow-y: auto;
   text-align: left;
@@ -31,21 +65,47 @@ th { background: #f5f5f5; font-weight: bold; }
 .type-day2 { color: orange; font-weight: bold; }
 .type-day3 { color: red; font-weight: bold; }
 
-.summary-card {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid #ddd;
-  background: #fafafa;
-  font-size: 16px;
+.time-ok { background: #e8f5e9; }
+.time-warn { background: #fff8e1; }
+.time-over { background: #ffebee; color: red; font-weight: bold; }
+.time-empty { background: #f2f2f2; color: #999; }
+
+.missing {
+  color: red;
+  font-weight: bold;
 }
 
-.small { color: #666; font-size: 13px; }
+.details-row {
+  display: none;
+}
+
+.unit-toggle {
+  cursor: pointer;
+  font-weight: bold;
+  color: #3366cc;
+}
+
+.control-box {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+}
+
+.small {
+  color: #666;
+  font-size: 13px;
+}
 </style>
 </head>
 
 <body>
 
 <h1>학습 시간 계산기</h1>
+
+<div class="sticky-summary" id="topSummary">
+  파일을 업로드하면 요약이 표시됩니다.
+</div>
 
 <h2>1. 데이터 입력</h2>
 <input type="file" id="file" accept=".xlsx,.xls">
@@ -60,12 +120,31 @@ th { background: #f5f5f5; font-weight: bold; }
 <table id="summary"></table>
 
 <h2>3. Day 스케줄</h2>
-<button onclick="autoSchedule()">🔥 자동 커리큘럼 생성</button>
-<button onclick="downloadCSV()">⬇️ 다운로드</button>
+
+<div class="control-box">
+  <b>학생 유형 / 하루 기준 시간</b><br>
+
+  <select id="levelSelect" onchange="applyLevelTime()">
+    <option value="60">하위권 - 60분</option>
+    <option value="90" selected>중위권 - 90분</option>
+    <option value="120">상위권 - 120분</option>
+  </select>
+
+  <input type="number" id="dailyLimit" value="90" min="10" style="width:80px;"> 분
+
+  <br><br>
+
+  <b>자동 분배 옵션</b><br>
+  <button onclick="autoScheduleBasic()">기본형 자동분배</button>
+  <button onclick="autoScheduleByLimit()">기준시간 맞춤형 자동분배</button>
+  <button onclick="autoScheduleAdvanced()">심화분리형 자동분배</button>
+  <button onclick="downloadCSV()">⬇️ 다운로드</button>
+</div>
+
 <table id="schedule"></table>
 
 <h2>4. 커리큘럼 요약</h2>
-<div id="curriculumSummary" class="summary-card">파일을 업로드하면 계산됩니다.</div>
+<div id="curriculumSummary" class="control-box">파일을 업로드하면 계산됩니다.</div>
 
 <script>
 let summaryData = [];
@@ -89,8 +168,36 @@ const columns = [
 
 const allKeys = ['concept', ...columns];
 
+const basicDay1Keys = [
+  'concept',
+  '개념원리 확인문제',
+  '핵심문제',
+  '핵심문제up'
+];
+
+const advancedDay2Keys = [
+  '계산력 강화하기',
+  '이문시',
+  '이문시up',
+  'step1',
+  'step2',
+  'step3',
+  '서술형예제',
+  '서술형유제'
+];
+
 function labelName(key) {
   return key === 'concept' ? '개념영상' : key;
+}
+
+function getDailyLimit() {
+  return Number(document.getElementById('dailyLimit').value || 90);
+}
+
+function applyLevelTime() {
+  document.getElementById('dailyLimit').value = document.getElementById('levelSelect').value;
+  updateAllRows();
+  updateCurriculumSummary();
 }
 
 function saveState() {
@@ -277,28 +384,42 @@ function renderSchedule() {
 
   let html = `
     <tr>
+      <th>펼치기</th>
       <th>unit_id</th>
       <th>타입</th>
-      <th>Day1</th>
       <th>Day1 시간</th>
-      <th>Day2</th>
       <th>Day2 시간</th>
-      <th>Day3</th>
       <th>Day3 시간</th>
+      <th>미완성</th>
     </tr>
   `;
 
   summaryData.forEach(row => {
     html += `
       <tr>
+        <td><span class="unit-toggle" onclick="toggleDetail('${row.unit}')">열기</span></td>
         <td>${row.unit}</td>
         <td id="type_${row.unit}">-</td>
-        <td>${renderCheckboxGroup(row, 'd1')}</td>
         <td id="time_d1_${row.unit}">0.0</td>
-        <td>${renderCheckboxGroup(row, 'd2')}</td>
         <td id="time_d2_${row.unit}">0.0</td>
-        <td>${renderCheckboxGroup(row, 'd3')}</td>
         <td id="time_d3_${row.unit}">0.0</td>
+        <td id="missing_${row.unit}">-</td>
+      </tr>
+      <tr id="detail_${row.unit}" class="details-row">
+        <td colspan="7">
+          <table>
+            <tr>
+              <th>Day1</th>
+              <th>Day2</th>
+              <th>Day3</th>
+            </tr>
+            <tr>
+              <td>${renderCheckboxGroup(row, 'd1')}</td>
+              <td>${renderCheckboxGroup(row, 'd2')}</td>
+              <td>${renderCheckboxGroup(row, 'd3')}</td>
+            </tr>
+          </table>
+        </td>
       </tr>
     `;
   });
@@ -306,6 +427,11 @@ function renderSchedule() {
   el.innerHTML = html;
   updateAllRows();
   updateCurriculumSummary();
+}
+
+function toggleDetail(unitId) {
+  const row = document.getElementById(`detail_${unitId}`);
+  row.style.display = row.style.display === 'table-row' ? 'none' : 'table-row';
 }
 
 function handleCheck(input) {
@@ -332,6 +458,7 @@ function updateAllRows() {
 function updateRow(unitId) {
   calculateTimes(unitId);
   updateType(unitId);
+  updateMissing(unitId);
 }
 
 function calculateTimes(unitId) {
@@ -350,9 +477,22 @@ function calculateTimes(unitId) {
     if (day === 'd3') d3 += value;
   });
 
-  document.getElementById(`time_d1_${unitId}`).innerText = d1.toFixed(1);
-  document.getElementById(`time_d2_${unitId}`).innerText = d2.toFixed(1);
-  document.getElementById(`time_d3_${unitId}`).innerText = d3.toFixed(1);
+  setTimeCell(`time_d1_${unitId}`, d1);
+  setTimeCell(`time_d2_${unitId}`, d2);
+  setTimeCell(`time_d3_${unitId}`, d3);
+}
+
+function setTimeCell(id, value) {
+  const el = document.getElementById(id);
+  const limit = getDailyLimit();
+
+  el.innerText = value.toFixed(1);
+  el.className = '';
+
+  if (value === 0) el.classList.add('time-empty');
+  else if (value > limit) el.classList.add('time-over');
+  else if (value >= limit * 0.7) el.classList.add('time-ok');
+  else el.classList.add('time-warn');
 }
 
 function getUnitType(unitId) {
@@ -376,19 +516,86 @@ function updateType(unitId) {
   }
 }
 
-function autoSchedule() {
+function updateMissing(unitId) {
+  const row = summaryData.find(r => r.unit == unitId);
+  const activeKeys = getActiveKeysForUnit(row);
+  const assigned = Object.keys(state[unitId] || {});
+  const missing = activeKeys.filter(k => !assigned.includes(k));
+
+  const el = document.getElementById(`missing_${unitId}`);
+
+  if (missing.length === 0) {
+    el.innerText = '완료';
+    el.className = '';
+  } else {
+    el.innerText = `${missing.length}개 미배정`;
+    el.className = 'missing';
+  }
+}
+
+function autoScheduleBasic() {
   summaryData.forEach(row => {
     const unitId = row.unit;
     state[unitId] = {};
 
-    if (row.concept > 0) state[unitId].concept = 'd1';
-    if (row['개념원리 확인문제'] > 0) state[unitId]['개념원리 확인문제'] = 'd1';
-    if (row['핵심문제'] > 0) state[unitId]['핵심문제'] = 'd1';
-    if (row['핵심문제up'] > 0) state[unitId]['핵심문제up'] = 'd1';
+    basicDay1Keys.forEach(key => {
+      if (row[key] > 0) state[unitId][key] = 'd1';
+    });
 
     allKeys.forEach(key => {
       if (!state[unitId][key] && row[key] > 0) {
         state[unitId][key] = 'd2';
+      }
+    });
+  });
+
+  saveState();
+  renderSchedule();
+}
+
+function autoScheduleByLimit() {
+  const limit = getDailyLimit();
+
+  summaryData.forEach(row => {
+    const unitId = row.unit;
+    state[unitId] = {};
+
+    let currentDay = 'd1';
+    let currentTime = 0;
+
+    getActiveKeysForUnit(row).forEach(key => {
+      const time = row[key] || 0;
+
+      if (currentTime + time > limit && currentDay === 'd1') {
+        currentDay = 'd2';
+        currentTime = 0;
+      } else if (currentTime + time > limit && currentDay === 'd2') {
+        currentDay = 'd3';
+        currentTime = 0;
+      }
+
+      state[unitId][key] = currentDay;
+      currentTime += time;
+    });
+  });
+
+  saveState();
+  renderSchedule();
+}
+
+function autoScheduleAdvanced() {
+  summaryData.forEach(row => {
+    const unitId = row.unit;
+    state[unitId] = {};
+
+    basicDay1Keys.forEach(key => {
+      if (row[key] > 0) state[unitId][key] = 'd1';
+    });
+
+    allKeys.forEach(key => {
+      if (!state[unitId][key] && row[key] > 0) {
+        if (advancedDay2Keys.includes(key)) state[unitId][key] = 'd2';
+        else state[unitId][key] = 'd1';
       }
     });
   });
@@ -402,9 +609,16 @@ function updateCurriculumSummary() {
   let day2Count = 0;
   let day3Count = 0;
   let totalDays = 0;
+  let overCount = 0;
+  let missingCount = 0;
 
   summaryData.forEach(row => {
     const type = getUnitType(row.unit);
+    const activeKeys = getActiveKeysForUnit(row);
+    const assigned = Object.keys(state[row.unit] || {});
+    const missing = activeKeys.filter(k => !assigned.includes(k));
+
+    if (missing.length > 0) missingCount++;
 
     if (type === 'day1') {
       day1Count++;
@@ -416,12 +630,24 @@ function updateCurriculumSummary() {
       day3Count++;
       totalDays += 3;
     }
+
+    ['d1','d2','d3'].forEach(day => {
+      const time = getDayTime(row, day);
+      if (time > getDailyLimit()) overCount++;
+    });
   });
 
-  document.getElementById('curriculumSummary').innerHTML = `
-    <b>총 예상 소요일:</b> ${totalDays}일<br>
-    day1 소단원: ${day1Count}개 / day2 소단원: ${day2Count}개 / day3 소단원: ${day3Count}개
+  const text = `
+    <b>총 예상 소요일:</b> ${totalDays}일 /
+    day1 소단원: ${day1Count}개 /
+    day2 소단원: ${day2Count}개 /
+    day3 소단원: ${day3Count}개 /
+    기준시간 초과: ${overCount}건 /
+    미완성 소단원: ${missingCount}개
   `;
+
+  document.getElementById('curriculumSummary').innerHTML = text;
+  document.getElementById('topSummary').innerHTML = text;
 }
 
 function getDayText(row, dayKey) {
@@ -450,11 +676,14 @@ function getDayTime(row, dayKey) {
 }
 
 function downloadCSV() {
-  const rows = [['unit_id', 'type', 'day1', 'day1_time', 'day2', 'day2_time', 'day3', 'day3_time']];
+  const rows = [['unit_id', 'type', 'day1', 'day1_time', 'day2', 'day2_time', 'day3', 'day3_time', 'missing']];
 
   summaryData.forEach(row => {
     const unitId = row.unit;
     const type = getUnitType(unitId);
+    const activeKeys = getActiveKeysForUnit(row);
+    const assigned = Object.keys(state[unitId] || {});
+    const missing = activeKeys.filter(k => !assigned.includes(k)).map(labelName);
 
     rows.push([
       unitId,
@@ -464,7 +693,8 @@ function downloadCSV() {
       getDayText(row, 'd2'),
       getDayTime(row, 'd2').toFixed(1),
       getDayText(row, 'd3'),
-      getDayTime(row, 'd3').toFixed(1)
+      getDayTime(row, 'd3').toFixed(1),
+      missing.join(' / ')
     ]);
   });
 
