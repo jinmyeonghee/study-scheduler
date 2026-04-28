@@ -112,15 +112,13 @@ th {
 <h2>3. Day 스케줄</h2>
 
 <div class="control-box">
-  <b>학생 유형 / 하루 기준 시간</b><br>
+  <b>하루 기준 시간</b><br>
 
-  <select id="levelSelect" onchange="applyLevelTime()">
-    <option value="60">하위권 - 60분</option>
-    <option value="90" selected>중위권 - 90분</option>
-    <option value="120">상위권 - 120분</option>
+  <select id="dailyLimit" onchange="applyDailyLimit()">
+    <option value="60">60분</option>
+    <option value="90" selected>90분</option>
+    <option value="120">120분</option>
   </select>
-
-  <input type="number" id="dailyLimit" value="90" min="10" style="width:80px;"> 분
 
   <br><br>
 
@@ -162,7 +160,9 @@ const basicDay1Keys = [
   'concept',
   '개념원리 확인문제',
   '핵심문제',
-  '핵심문제up'
+  '확인문제',
+  '핵심문제up',
+  '확인문제up'
 ];
 
 const advancedDay2Keys = [
@@ -184,8 +184,7 @@ function getDailyLimit() {
   return Number(document.getElementById('dailyLimit').value || 90);
 }
 
-function applyLevelTime() {
-  document.getElementById('dailyLimit').value = document.getElementById('levelSelect').value;
+function applyDailyLimit() {
   updateAllRows();
   updateCurriculumSummary();
 }
